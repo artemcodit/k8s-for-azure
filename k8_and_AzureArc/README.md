@@ -1,32 +1,30 @@
+```
 az account show
-  az logout
- az login
-```
+
+az logout
+
+az login
+
 az account list --output table
-```
-```
+
 az account set --subscription "<subscription-name-or-id>"
-```
-```
+
 az account show
 ```
 
-Use Docker Desktop with Enebled Kebernetes
+Use Docker Desktop with Enebled Kubernetes
+![Docker Setup](./images/my-image.png)
 
 Waiting until status Desktop Docker is running
 ```
 az login
-```
-```
+
 az account set --subscription $SUBSCRIPTION
-```
-```
+
 az provider register --namespace Microsoft.KubernetesConfiguration --wait
-```
-```
+
 az extension add --name k8s-extension --upgrade --yes
-```
-```
+
 az group create --name $AKS_CLUSTER_GROUP_NAME --location $LOCATION
 ```
 
