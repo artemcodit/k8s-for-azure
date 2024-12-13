@@ -13,7 +13,7 @@ az account show
 ```
 
 Use Docker Desktop with Enebled Kubernetes
-![Docker Setup](./images/my-image.png)
+![Docker Setup](./images/dockersetup.png)
 
 Waiting until status Desktop Docker is running
 ```
