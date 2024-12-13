@@ -1,18 +1,24 @@
 # Create SQL Server storage provider
 Set up any of the following SQL Server editions:
 •	SQL Server on premises
+
 •	Azure SQL Database 
 https://learn.microsoft.com/en-us/azure/azure-sql/database/sql-database-paas-overview
+
 •	Azure SQL Managed Instance
 https://learn.microsoft.com/en-us/azure/azure-sql/managed-instance/sql-managed-instance-paas-overview
+
 •	SQL Server enabled by Azure Arc
 https://learn.microsoft.com/en-us/sql/sql-server/azure-arc/overview
 
 
 CREATING LOCAL DATABASE 
+
 Prerequisites
 •	Docker Desktop installed and running.
+
 •	Kubernetes enabled on Docker Desktop.
+
 •	Sufficient system resources (2 CPUs, 4GB RAM) to run SQL Server in a container.
 
 # How to Run SQL Server in Kubernetes?
@@ -73,5 +79,45 @@ How to Verify the SQL Server Connection?
 2> GO
 exit
 ```
+And now
+1.	Open SQL Server Management Studio (SSMS).
+
+2.	Connect to SQL Server:
+
+o	Server name: localhost,1433
+
+o	Authentication: SQL Server Authentication
+
+o	Login: sa
+
+o	Password: YourStrong!Passw0rd
+
+3.	Click Connect.
+
+
+# Create a Database
+After connecting to SQL Server, you can create a new database.
+
+Option 1: Use SSMS or Azure Data Studio
+
+1.	Open SQL Server Management Studio (SSMS) or Azure Data Studio.
+
+2.	Right-click Databases in the Object Explorer.
+
+3.	Select New Database.
+
+4.	Enter DATABASENAME as the name of the new database.
+
+5.	Click OK.
+
+
+# Common Issues and Fixes
+
+| **Issue**                        | **Solution**                                           |
+|-----------------------------------|-------------------------------------------------------|
+| Port 1433 is already in use       | Stop the existing process using port 1433, or change to `-p 1434:1433`. |
+| Password does not meet requirements | Use a stronger password (e.g., `YourStrong!Passw0rd`). |
+
+
 This means that the SQL Server pod has access to the SMB share and can read/write files to/from it.
 Your SQL Server and SMB connection is successful. 🎉🎉🎉
