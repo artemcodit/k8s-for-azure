@@ -1,259 +1,194 @@
 Install the SMB driver using the following Helm commands:
 Add the specified chart repository, get the latest information for available charts, and install the specified chart archive.
 ```
-helm repo add csi-driver-smb https://raw.githubusercontent.com/kubernetes-csi/csi-driver-smb/master/charts 
+helm repo add azurefile-csi-driver https://raw.githubusercontent.com/kubernetes-sigs/azurefile-csi-driver/master/charts
 ```
 ```
 helm repo update
 ```
 ```
-helm install csi-driver-smb csi-driver-smb/csi-driver-smb --namespace kube-system --version v1.15.0
+helm install azurefile-csi-driver azurefile-csi-driver/azurefile-csi-driver --namespace kube-system
 ```
 
-Confirm that your SQL database is in the same network as your Arc-enabled Kubernetes cluster and SMB file share
 
-Find and save the connection string for the SQL database that you created
+CREATE AZURE_CONTAINER_REGISTRY
 
 
-# Why Do You Need an SMB File Share?
 
-The SMB file share acts as persistent storage for the Logic App runtime to store state, workflows, triggers, and artifacts. Azure Logic App Standard uses it to maintain workflow states and logs.
+To create SMB we need create Azure Container Registry.
+Then we need to create file share and secret
+Then we need to create pv-pvc.yaml files
+After push deploy our test file docker to the ACR
+After create deployment yaml pod for creating resource AzureFileShare with our file 
 
-# How to Set Up an SMB File Share?
-If you are running Kubernetes locally, you need to set up a shared network folder that Kubernetes pods can mount. You can achieve this using Azure File Share (if you have cloud access) or local network storage (like Samba/SMB).
 
-Here are the options to create an SMB file share:
+# STEP 1. Creating Azure Container Registry
+```
+az acr create --resource-group RESOURCE_GROUP --name ACR_CONATINER_REGISTRY_NAME --sku Basic
+az acr update --name ACR_CONATINER_REGISTRY_NAME --resource-group RESOURCE_GROUP --admin-enabled true
+```
+```
+ACR_USERNAME= az acr credential show -n ACR_CONATINER_REGISTRY_NAME --resource-group RESOURCE_GROUP --query username
+ACR_PASSWORD= az acr credential show -n ACR_CONATINER_REGISTRY_NAME --resource-group RESOURCE_GROUP --query 'passwords[0].value'
+```
+# STEP 2. Creating AzureFile share
+```
+az storage account create --name STORAGE_ACCOUNT_NAME -g RESOURCE_GROUP -l LOCATION --sku Standard_LRS
 
-OPTION 1: Use Local SMB File Share (for local Kubernetes)
+AZURE_STORAGE_CONNECTION_STRING= az storage account show-connection-string -n STORAGE_ACCOUNT_NAME -g RESOURCE_GROUP -o tsv
 
-Install Samba (SMB) Server on Windows
-Go to Control Panel > Programs > Turn Windows features on or off.
-Enable SMB 1.0/CIFS File Sharing Support.
-Create the Folder to Share
-Create a folder (for example) at C:\SMBShare.
-Right-click the folder, select Properties > Sharing > Advanced Sharing.
-Check Share this folder and set the share name (for example, SMBShare).
-Set Permissions so that Everyone has Read/Write permissions.
-Test the Share
-Run this command from another system or a Docker container:
-net use \\<your-local-ip>\SMBShare /user:<your-username> <your-password>
+az storage share create -n AZURE_FILE_SHARE_NAME --connection-string AZURE_STORAGE_CONNECTION_STRING
+```
 
-Access SMB from Kubernetes
-Update your Kubernetes PersistentVolume to point to the share like this:
+After completing the operations, we can check the storage account and the File shares we just created through the Azure Portal.
+
+Microsoft Defender for Storage
+Microsoft Defender is an advanced threat protection tool which we can use for potential security threats in both our Azure-native and hybrid environments. In order to protect our File shares service, we will benefit from Microsoft Defender’s native intelligent security layer for storages.
+It is possible to activate Microsoft Defender for Storage either at the subscription level or at the resources level that we choose. Now, using the commands below, let’s activate advanced threat protection for the storage account we created.
+```
+az security atp storage update --resource-group RESOURCE_GROUP --storage-account STORAGE_ACCOUNT_NAME --is-enabled true
+```
+
+# STEP 3. Creating Persistent Volumes and Persistent Volume Claims
+```
+STORAGE_KEY= $(az storage account keys list --resource-group RESOURCE_GROUP --account-name STORAGE_ACCOUNT_NAME --query "[0].value" -o tsv)
+
+kubectl create secret generic K8S_AZURE_SOTRAGE_SECRET_NAME --from-literal=azurestorageaccountname=STORAGE_ACCOUNT_NAME --from-literal=azurestorageaccountkey=$STORAGE_KEY
+```
+
+A PersistentVolumeClaim (PVC) is a Kubernetes resource that represents a request for storage by a pod. It can specify requirements for storage, such as the size, access mode, and storage class. Kubernetes uses the PVC to find an available PV that satisfies the PVC’s requirements.
+
+A PVC is created by a pod to request storage from a PV. Once a PVC is created, it can be mounted as a volume in a pod. The pod can then use the mounted volume to store and retrieve data.
+
+PV_PVC_NAME.yaml
 ```
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: smb-pv
+  name: PV_NAME
+  namespace: NAMESPACE
 spec:
   capacity:
     storage: 5Gi
   accessModes:
     - ReadWriteMany
-  csi:
-    driver: smb.csi.k8s.io
-    volumeHandle: unique-volume-id
-    volumeAttributes:
-      source: "//host.docker.internal/SMBShare"
-  mountOptions:
-    - dir_mode=0777
-    - file_mode=0777
-    - vers=3.0
-```
-
-Option 2: Use Azure File Share (if Cloud is Available)
-If you have access to Azure storage account, follow these steps:
-Create a Storage Account
-```
-az storage account create --name STORAGE_ACCOUNT_NAME --resource-group GROUP_NAME --location LOCATION --sku Standard_LRS
-```
-
-Create a File Share
-```
-az storage share-rm create --resource-group GROUP_NAME --storage-account STORAGE_ACCOUNT_NAME --name FILE_SHARE_NAME --quota 10
-```
-
-Get the Connection String
-```
-az storage account show-connection-string --name STORAGE_ACCOUNT_NAME --resource-group GROUP_NAME
-```
-
-Mount the Share in Kubernetes
-```
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: azure-file-pv
-spec:
-  capacity:
-    storage: 10Gi
-  accessModes:
-    - ReadWriteMany
-  persistentVolumeReclaimPolicy: Retain
   azureFile:
-    secretName: azure-secret
-    shareName: logicappshare
+    secretName: K8S_AZURE_SOTRAGE_SECRET_NAME
+    shareName: AZURE_FILE_SHARE_NAME
     readOnly: false
-```
-
-****
-To mount an SMB File Share or an Azure File Share in Kubernetes, you need to create both a PersistentVolume (PV) and a PersistentVolumeClaim (PVC). These resources will allow your Kubernetes pods to access the file share.
-
-Here is a step-by-step guide to mounting the SMB share or Azure File share.
-Access to SMB Share or Azure File Share:
-```
-  For SMB: You need the SMB share URL, credentials (username, password), and permissions.
-```
-```
-  For Azure File: You need the storage account name, file share name, and storage access key.
-```
-  Create a Kubernetes Secret for accessing the SMB/Azure file share.
-  Create PersistentVolume (PV) and PersistentVolumeClaim (PVC) for the storage.
-  Mount the volume in the pod definition to make the storage available in the container.
-
-
-Create the Kubernetes Secret
-
-The secret will store the access credentials required to authenticate with the SMB or Azure file share.
-
-For Local SMB Share
-
-For Azure File Share
-
-If you have an Azure Storage Account and Azure File Share, use the following command:
-
-Create the PersistentVolume (PV)
-
-A PersistentVolume (PV) is a storage resource in Kubernetes. Here’s how to define it for an SMB or Azure File Share.
-For Local SMB Share
-```
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: smb-pv
-spec:
-  capacity:
-    storage: 10Gi
-  accessModes:
-    - ReadWriteMany
   persistentVolumeReclaimPolicy: Retain
-  storageClassName: manual
-  csi:
-    driver: smb.csi.k8s.io
-    volumeHandle: unique-volume-id
-    volumeAttributes:
-      source: "//host.docker.internal/SMBShare"
-  mountOptions:
-    - dir_mode=0777
-    - file_mode=0777
-    - vers=3.0
-```
-
-
-For Azure File Share
-```
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: azure-file-pv
-spec:
-  capacity:
-    storage: 10Gi
-  accessModes:
-    - ReadWriteMany
-  persistentVolumeReclaimPolicy: Retain
-  azureFile:
-    secretName: azure-secret
-    shareName: logicappshare
-    readOnly: false
-```
-
-Explanation:
-azureFile: This part is specific to Azure File Share.
-
-shareName: The name of the Azure File Share you created.
-
-secretName: This points to the Kubernetes secret you created earlier.
-
-
-Create the PersistentVolumeClaim (PVC)
-A PersistentVolumeClaim (PVC) is a request for storage by a Kubernetes pod. Here’s an example for local SMB share and Azure file share.
-For Local SMB Share
-```
+---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: smb-pvc
+  name: PVC_NAME
 spec:
   accessModes:
     - ReadWriteMany
-  resources:
-    requests:
-      storage: 5Gi
-  storageClassName: manual
-```
-
-For Azure File Share
-```
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: azure-file-pvc
-spec:
-  accessModes:
-    - ReadWriteMany
+  storageClassName: ""
   resources:
     requests:
       storage: 5Gi
 ```
 
-Apply the PV and PVC
-You should see the STATUS as Bound for both PersistentVolume and PersistentVolumeClaim.
-Mount the Volume in a Kubernetes Pod
+
 ```
-apiVersion: v1
-kind: Pod
+kubectl apply -f DEPLOYMENT_NAME.yaml
+kubectl get pv PV_NAME
+kubectl get pvc PVC_NAME
+kubectl describe pvc PVC_NAME
+```
+
+# STEP 4. CREATE DEPLOYMENT FILE
+
+ACR_SECRET= kubectl create secret docker-registry ARC_SECRET --docker-server=https://ACR_CONATINER_REGISTRY_NAME.azurecr.io --docker-username=ACR_USERNAME --docker-password=ACR_PASSWORD --docker-email=YOUR_EMAIL
+
+And now we are going to create simple project for C# console that will create file in Azure FileShare for us:
+
+createfile.csproj
+```
+using (StreamWriter writer = File.CreateText("/mnt/azure/mytext.txt"))
+  {
+     await writer.WriteLineAsync("hello");
+  } 
+await Task.Delay(TimeSpan.FromHours(1));
+```
+
+DOCKERFILE
+```
+FROM mcr.microsoft.com/dotnet/runtime:8.0 AS base
+WORKDIR /app
+
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+WORKDIR /src
+COPY ["PATH_TO_FOLDER/createfile.csproj", "PATH_TO_FOLDER/"]
+RUN dotnet restore "PATH_TO_FOLDER/createfile.csproj"
+COPY ./createfile ./createfile
+WORKDIR "/src/createfile"
+RUN dotnet build "createfile.csproj" -c Release -o /app/build
+
+FROM build AS publish
+RUN dotnet publish "createfile.csproj" -c Release -o /app/publish
+
+FROM base AS final
+WORKDIR /app
+COPY --from=publish /app/publish .
+ENTRYPOINT ["dotnet", "createfile.dll"]
+```
+
+```
+az acr login --name ACR_CONATINER_REGISTRY_NAME --resource-group RESOURCE_GROUP
+docker login ACR_CONATINER_REGISTRY_NAME.azurecr.io -u ACR_USERNAME -p ACR_PASSWORD
+docker build -t ACR_CONATINER_REGISTRY_NAME.azurecr.io/DEPLOYMENT_APP_NAME:v1 .   
+docker push ACR_CONATINER_REGISTRY_NAME.azurecr.io/DEPLOYMENT_APP_NAME:v1
+```
+
+
+DEPLOYMENT_NAME.yaml
+```
+apiVersion: apps/v1
+kind: Deployment
 metadata:
-  name: test-smb-pod
+  name: DEPLOYMENT_NAME
+  labels:
+    app: DEPLOYMENT_APP_NAME
 spec:
-  containers:
-  - name: my-container
-    image: nginx
-    volumeMounts:
-    - name: smb-volume
-      mountPath: /mnt/smb
-  volumes:
-  - name: smb-volume
-    persistentVolumeClaim:
-      claimName: azure-file-pvc
+  replicas: 1
+  selector:
+    matchLabels:
+      app: DEPLOYMENT_APP_NAME
+  template:
+    metadata:
+      labels:
+        app: DEPLOYMENT_APP_NAME
+    spec:
+      containers:
+      - name: DEPLOYMENT_APP_NAME
+        image: ACR_CONATINER_REGISTRY_NAME.azurecr.io/DEPLOYMENT_APP_NAME:v1
+        volumeMounts:
+        - name: azurefileshare
+          mountPath: /mnt/azure
+      volumes:
+      - name: azurefileshare
+        persistentVolumeClaim:
+          claimName: PVC_NAME
+      imagePullSecrets:
+      - name: K8S_AZURE_SOTRAGE_SECRET_NAME
+```
+```
+kubectl apply -f ./DEPLOYMENT_NAME.yaml
+kubectl get pods
 ```
 
-Explanation:
-mountPath: This is the path where the SMB/Azure share will be accessible inside the container.
-volumeMounts: Attaches the volume (bound from the PVC) to the container.
-s
-Apply the Pod YAML
-If everything works correctly, you should see the contents of the SMB share.
-
-**If something happend:
-
-Check your yaml twice and then:
-
-The SMB file share is empty (this is normal if no files are uploaded).
-
-You might want to create files inside the share to test persistence:
-
+Ensure that the storage account key has access to File Services.
+Example to Check File
 ```
-echo "Hello from Kubernetes!" > /mnt/smb/testfile.txt
-Exit the pod and re-enter it to verify the file persists:
-exit
-```
-The expectation was that /mnt/smb should be mounted as CIFS (SMB protocol), not ext4. This may indicate that the mount is not correctly pointing to your Azure File Share, and it might be referencing a local or cluster-based volume.
-
-Check Your PVC and StorageClass
-```
-  volumeName: It should link to the correct PersistentVolume (PV).
-  status.phase: Should be Bound.
+kubectl exec -it $(kubectl get pods -l app=DEPLOYMENT_APP_NAME --output=jsonpath="{.items[0].metadata.name}") -- cat /mnt/azure/mytext.txt
 ```
 
-How to remove Remove pod, pv,pvc,pod files
+
+
+```
+kubectl exec -it $(kubectl get pods -l app=DEPLOYMENT_APP_NAME --output=jsonpath="{.items[0].metadata.name}") -- df -h
+kubectl describe pod $(kubectl get pods -l app=DEPLOYMENT_APP_NAME --output=jsonpath="{.items[0].metadata.name}")
+```

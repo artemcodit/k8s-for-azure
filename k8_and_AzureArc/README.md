@@ -10,6 +10,9 @@ az account list --output table
 az account set --subscription "<subscription-name-or-id>"
 
 az account show
+
+az account tenant list
+
 ```
 
 Use Docker Desktop with Enebled Kubernetes
@@ -259,7 +262,7 @@ Now, create and install the Azure Container Apps extension with your Azure Arc-e
 
 Create and install the extension with Log Analytics enabled for your Azure Arc-enabled Kubernetes cluster. You can't later add Log Analytics to the extension.
 ```
-az k8s-extension create --resource-group $GROUP_NAME --name $EXTENSION_NAME --cluster-type connectedClusters --cluster-name $CONNECTED_CLUSTER_NAME --extension-type 'Microsoft.App.Environment' --release-train stable --auto-upgrade-minor-version true --scope cluster --release-namespace $NAMESPACE --configuration-settings "Microsoft.CustomLocation.ServiceAccount=default" --configuration-settings "appsNamespace=${NAMESPACE}" --configuration-settings "keda.enabled=true" --configuration-settings "keda.logicAppsScaler.enabled=true" --configuration-settings "keda.logicAppsScaler.replicaCount=1" --configuration-settings "containerAppController.api.functionsServerEnabled=true" --configuration-settings "envoy.externalServiceAzureILB=false" --configuration-settings "functionsProxyApiConfig.enabled=true" --configuration-settings "clusterName=${CONNECTED_ENVIRONMENT_NAME}" --configuration-settings " --configuration-settings "logProcessor.appLogs.destination=log-analytics" --configuration-protected-settings "logProcessor.appLogs.logAnalyticsConfig.customerId=${LOG_ANALYTICS_WORKSPACE_ID_ENC}" --configuration-protected-settings "logProcessor.appLogs.logAnalyticsConfig.sharedKey=${LOG_ANALYTICS_KEY_ENC}"
+az k8s-extension create --resource-group $GROUP_NAME --name $EXTENSION_NAME --cluster-type connectedClusters --cluster-name $CONNECTED_CLUSTER_NAME --extension-type 'Microsoft.App.Environment' --release-train stable --auto-upgrade-minor-version true --scope cluster --release-namespace $NAMESPACE --configuration-settings "Microsoft.CustomLocation.ServiceAccount=default" --configuration-settings "appsNamespace=${NAMESPACE}" --configuration-settings "keda.enabled=true" --configuration-settings "keda.logicAppsScaler.enabled=true" --configuration-settings "keda.logicAppsScaler.replicaCount=1" --configuration-settings "containerAppController.api.functionsServerEnabled=true" --configuration-settings "envoy.externalServiceAzureILB=false" --configuration-settings "functionsProxyApiConfig.enabled=true" --configuration-settings "clusterName=${CONNECTED_ENVIRONMENT_NAME}"" --configuration-settings "logProcessor.appLogs.destination=log-analytics" --configuration-protected-settings "logProcessor.appLogs.logAnalyticsConfig.customerId=${LOG_ANALYTICS_WORKSPACE_ID_ENC}" --configuration-protected-settings "logProcessor.appLogs.logAnalyticsConfig.sharedKey=${LOG_ANALYTICS_KEY_ENC}"
 ```
 
 * envoy.annotations.service.beta.kubernetes.io/azure-load-balancer-resource-group=${GROUP_NAME}"
